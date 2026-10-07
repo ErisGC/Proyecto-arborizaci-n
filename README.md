@@ -28,7 +28,7 @@ pip install -r requirements-dev.txt
 uvicorn app.main:app --reload
 ```
 
-El backend queda disponible en `http://127.0.0.1:8000` (documentación interactiva en `/api/docs`).
+El backend queda disponible en `http://127.0.0.1:8000` (documentación interactiva en `/api/docs`). Los detalles de configuración están en [backend/README.md](backend/README.md).
 
 Con Docker (backend + PostgreSQL en un solo paso):
 
@@ -36,7 +36,9 @@ Con Docker (backend + PostgreSQL en un solo paso):
 cd backend
 copy .env.example .env        # completa POSTGRES_PASSWORD
 docker compose up --build -d
-``` Los detalles de configuración están en [backend/README.md](backend/README.md).
+```
+
+Para mostrar la app en celulares con GPS (requiere HTTPS) hay un modo de presentación con túnel HTTPS: `docker compose --profile presentacion up -d`. Los pasos están en [backend/README.md](backend/README.md#https-necesario-para-el-gps).
 
 ## Cómo levantar el frontend
 

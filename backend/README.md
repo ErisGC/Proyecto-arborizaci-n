@@ -71,6 +71,65 @@ docker compose up -d db
 uvicorn app.main:app --reload     # con POSTGRES_HOST=localhost en el .env
 ```
 
+## HTTPS (necesario para el GPS)
+
+Los navegadores solo dan la ubicación GPS en páginas servidas por **HTTPS**, o en `localhost`. Si un celular abre la app por `http://192.168.x.x`, la cámara funciona pero el GPS no. Además, una página HTTPS no puede llamar a una API en HTTP, así que el frontend y el backend deben publicarse juntos con HTTPS.
+
+Para eso, Docker Compose trae un proxy ([Caddy](https://caddyserver.com/)) que publica en una sola dirección HTTPS:
+
+- `/api/...`: el backend.
+- Todo lo demás: el frontend compilado (`frontend/dist`).
+
+### Para la presentación (desde cualquier celular)
+
+1. Compilar el frontend para que use la API por la misma dirección:
+
+   ```powershell
+   cd frontend
+   "VITE_API_URL=/api" | Set-Content -Encoding ascii .env.production.local
+   npm install
+   npm run build
+   ```
+
+   En macOS o Linux, el primer comando es `echo VITE_API_URL=/api > .env.production.local`.
+
+2. Levantar todo con el túnel HTTPS:
+
+   ```powershell
+   cd ..\backend
+   docker compose --profile presentacion up --build -d
+   docker compose logs tunel | Select-String trycloudflare
+   ```
+
+3. Abrir en el celular el enlace `https://<algo>.trycloudflare.com` que aparece. Tiene certificado válido, así que el GPS y la cámara funcionan sin advertencias.
+
+Tenlo en cuenta:
+
+- El enlace cambia cada vez que se inicia el túnel. Sácalo justo antes de presentar.
+- **Cualquiera con el enlace puede abrir la app**, y la API todavía no tiene inicio de sesión. Apaga el túnel al terminar con `docker compose stop tunel`.
+- El túnel rápido de Cloudflare es gratuito y no necesita cuenta, pero no garantiza disponibilidad. Pruébalo antes de la presentación.
+
+### En este computador
+
+```powershell
+docker compose --profile https up --build -d
+```
+
+Abre https://localhost. Caddy crea un certificado local que el navegador no conoce, así que muestra una advertencia la primera vez. Para quitarla, instala el certificado raíz de Caddy en Windows:
+
+```powershell
+docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt caddy-root.crt
+certutil -user -addstore Root caddy-root.crt
+```
+
+### En un servidor con dominio propio
+
+En el `.env` del servidor, pon `SITE_ADDRESS=midominio.com`, `APP_ENV=produccion` y un `JWT_SECRET` real. Luego levanta el perfil `https`. Caddy obtiene y renueva solo el certificado de Let's Encrypt; el dominio debe apuntar al servidor y los puertos 80 y 443 deben estar abiertos.
+
+### Puertos ocupados
+
+Si el 80 o el 443 ya están en uso (en Windows pasa con IIS o Skype), cámbialos con `HTTP_PORT` y `HTTPS_PORT` en el `.env`; por ejemplo `HTTPS_PORT=8443` abre https://localhost:8443. El modo `presentacion` no depende de esos puertos.
+
 ## Correr sin Docker
 
 ```powershell
