@@ -24,6 +24,7 @@ Luego edita `.env` y completa al menos `POSTGRES_PASSWORD`. En macOS o Linux el 
 | `JWT_SECRET` | Clave para firmar las sesiones | *(obligatoria en producción)* |
 | `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES` | Algoritmo y duración de la sesión | `HS256`, `480` |
 | `CORS_ORIGINS` | Direcciones del frontend que pueden llamar a la API, separadas por coma | `http://localhost:5173` |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Primer administrador; se crea al arrancar si no hay usuarios | *(vacías)* |
 | `STORAGE_PATH` | Carpeta de las fotografías | `data/fotos` |
 
 Reglas que se revisan al arrancar:
@@ -142,11 +143,76 @@ uvicorn app.main:app --reload
 - Documentación: http://127.0.0.1:8000/api/docs
 - Estado del servidor y de la base de datos: http://127.0.0.1:8000/api/salud
 
-Para probar sin PostgreSQL, pon `DATABASE_URL=sqlite:///./data/local.db` en el `.env`.
+Para probar sin PostgreSQL, pon `DATABASE_URL=sqlite:///./data/local.db` en el `.env`. Para poder iniciar sesión, define también `ADMIN_EMAIL` y `ADMIN_PASSWORD`.
+
+## Usuarios, roles y permisos
+
+El primer administrador se crea al arrancar si la base no tiene usuarios y el `.env` trae `ADMIN_EMAIL` y `ADMIN_PASSWORD`. Con él se crean los demás desde `POST /api/usuarios`.
+
+Para iniciar sesión se envía un formulario (`username` es el correo, `password` la contraseña) a `POST /api/auth/login`. La respuesta trae un token, que se manda en las demás peticiones con la cabecera `Authorization: Bearer <token>`. En `/api/docs`, el botón **Authorize** hace lo mismo.
+
+| Qué se puede hacer | admin | registrador | consulta | sin sesión |
+|---|:-:|:-:|:-:|:-:|
+| Ver catálogos, árboles, historial, fotos y resumen | ✔ | ✔ | ✔ | 401 |
+| Registrar árboles y visitas | ✔ | ✔ | 403 | 401 |
+| Dar de baja un árbol | ✔ | 403 | 403 | 401 |
+| Crear y listar usuarios | ✔ | 403 | 403 | 401 |
+
+La tabla está definida en un solo lugar, `app/domain/services/permisos.py`, y las pruebas de permisos se generan desde ahí. El rol se lee de la base de datos en cada petición, no del token: si a alguien le cambian el rol o lo desactivan, el cambio aplica de inmediato.
+
+## Rutas de la API
+
+| Método | Ruta | Para qué |
+|---|---|---|
+| GET | `/api/salud` | Estado del servidor y de la base (pública) |
+| POST | `/api/auth/login` | Iniciar sesión (pública) |
+| GET | `/api/auth/yo` | Usuario de la sesión |
+| GET, POST | `/api/usuarios` | Listar y crear usuarios |
+| GET | `/api/catalogos` | Instituciones, zonas, etapas, interferencias, especies y hallazgos |
+| GET, POST | `/api/arboles` | Listar con filtros y registrar un árbol (multipart: `datos` en JSON + fotos) |
+| GET | `/api/arboles/{codigo}` | Detalle con la última visita y sus cálculos |
+| GET, POST | `/api/arboles/{codigo}/observaciones` | Historial y visita nueva |
+| POST | `/api/arboles/{codigo}/baja` | Dar de baja sin borrar el historial |
+| GET | `/api/fotos/{id}` | Archivo de una foto |
+| GET | `/api/reportes/resumen` | Totales por estado sanitario |
+
+Cada visita guarda sus cálculos ambientales (área de copa, biomasa, carbono, CO₂ y O₂) con las fórmulas de `app/infrastructure/calculations/ambientales.py`. Mientras las especies no tengan su densidad de madera, se usa una provisional (0,6 g/cm³) y el resultado queda marcado con `densidad_estimada: true`.
 
 ## Pruebas
 
 ```powershell
-pytest
-ruff check app tests
+pytest                       # todas las pruebas
+pytest --cov                 # con reporte de cobertura
+ruff check app seeds tests   # estilo
 ```
+
+| Carpeta | Qué prueba |
+|---|---|
+| `tests/unit` | Reglas del dominio, validaciones, cálculos, permisos y seguridad, sin base de datos |
+| `tests/integration` | Casos de uso con base de datos, almacenamiento de fotos y cálculos reales: códigos consecutivos, reintento si dos personas guardan a la vez, limpieza de fotos si falla el guardado, bajas, filtros |
+| `tests/api` | La API por HTTP, como la usa el frontend: flujo completo, la matriz de permisos (cada rol contra cada ruta), tokens vencidos o alterados, y el contrato de rutas y campos (`test_contrato.py`) |
+
+**Cobertura mínima.** La meta es al menos el 70 % en la lógica de validaciones y cálculos. Se mide así:
+
+```powershell
+pytest tests/unit --cov=app.domain --cov=app.infrastructure.calculations --cov-branch --cov-fail-under=70
+```
+
+El comando falla si la cobertura baja del 70 %. Hoy está en el 100 % (con ramas), y la del backend completo en el 99 %.
+
+**Con PostgreSQL.** Sin configuración adicional, las pruebas usan un SQLite temporal. Para correrlas contra PostgreSQL, define `TEST_DATABASE_URL` con una base de pruebas, que se borra en cada prueba:
+
+```powershell
+docker compose up -d db
+$env:TEST_DATABASE_URL="postgresql+psycopg://arborizacion:<tu clave>@localhost:5432/arborizacion"
+pytest
+```
+
+**Integración continua.** `.github/workflows/backend.yml` corre en cada Pull Request y en cada cambio a `main`:
+
+1. Estilo, todas las pruebas contra PostgreSQL 17 y la cobertura mínima del 70 %.
+2. Levanta `docker compose`, inicia sesión dentro del contenedor y prueba el proxy HTTPS.
+
+Si un cambio rompe algo que ya funcionaba, el PR lo muestra en rojo antes de integrarse.
+
+**Regresión.** Si cambias a propósito una ruta o un campo de las respuestas, actualiza `tests/api/test_contrato.py` y avisa al equipo de frontend, como pide el README del repositorio.
