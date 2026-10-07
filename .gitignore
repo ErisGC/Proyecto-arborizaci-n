@@ -5,6 +5,10 @@ __pycache__/
 backend/.env
 backend/*.db
 backend/data/
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
 
 # --- Frontend (React) ---
 node_modules/
