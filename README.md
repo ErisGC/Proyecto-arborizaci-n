@@ -12,7 +12,7 @@ mi-proyecto/
 
 ## Requisitos previos
 
-- Python 3.10+ instalado
+- Python 3.12+ instalado (o Docker Desktop para levantar el backend con `docker compose`)
 - Node.js y npm instalados
 
 ## Cómo levantar el backend
@@ -28,7 +28,15 @@ pip install -r requirements-dev.txt
 uvicorn app.main:app --reload
 ```
 
-El backend queda disponible en `http://127.0.0.1:8000` (documentación interactiva en `/api/docs`). Los detalles de configuración están en [backend/README.md](backend/README.md).
+El backend queda disponible en `http://127.0.0.1:8000` (documentación interactiva en `/api/docs`).
+
+Con Docker (backend + PostgreSQL en un solo paso):
+
+```bash
+cd backend
+copy .env.example .env        # completa POSTGRES_PASSWORD
+docker compose up --build -d
+``` Los detalles de configuración están en [backend/README.md](backend/README.md).
 
 ## Cómo levantar el frontend
 

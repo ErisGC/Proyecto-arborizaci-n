@@ -36,6 +36,41 @@ En el código, la configuración se lee con `get_settings()` de `app/core/config
 
 Si agregas una variable nueva a `Settings`, agrégala también a `.env.example`. Hay una prueba que falla si la plantilla queda incompleta o si trae una contraseña escrita.
 
+## Correr con Docker Compose
+
+Levanta el backend y PostgreSQL con la misma configuración en cualquier computador. Requiere [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+```powershell
+cd backend
+copy .env.example .env          # y completa POSTGRES_PASSWORD
+docker compose up --build -d
+```
+
+- API: http://localhost:8000/api/docs
+- Estado: http://localhost:8000/api/salud
+- PostgreSQL: `localhost:5432`, solo desde este computador (para pgAdmin o DBeaver)
+
+| Comando | Qué hace |
+|---|---|
+| `docker compose ps` | Muestra el estado. El backend aparece como `healthy` cuando ya se conectó a la base. |
+| `docker compose logs -f backend` | Muestra los mensajes del backend. |
+| `docker compose up --build -d` | Reconstruye la imagen después de cambiar el código o `requirements.txt`. |
+| `docker compose down` | Detiene todo. Los datos se conservan. |
+| `docker compose down -v` | Detiene todo y **borra** la base de datos y las fotos. |
+
+Cómo está armado:
+
+- **`db`**: PostgreSQL 17. Los datos viven en el volumen `datos_postgres`. El backend no arranca hasta que la base responde.
+- **`backend`**: la imagen del `Dockerfile` (Python 3.12, usuario sin privilegios). Lee el `.env`, pero dentro de Docker usa `db` como servidor de base de datos. Las fotos van al volumen `datos_fotos`. Se marca como sano cuando `/api/salud` responde.
+- Si los puertos 8000 o 5432 ya están ocupados, cámbialos con `BACKEND_PORT` y `DB_PORT` en el `.env`.
+
+Para programar con recarga automática, una opción cómoda es levantar solo la base con Docker y correr el backend en tu computador:
+
+```powershell
+docker compose up -d db
+uvicorn app.main:app --reload     # con POSTGRES_HOST=localhost en el .env
+```
+
 ## Correr sin Docker
 
 ```powershell
