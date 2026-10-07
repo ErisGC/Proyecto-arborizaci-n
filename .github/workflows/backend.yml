@@ -92,7 +92,8 @@ jobs:
           mkdir -p ../frontend/dist
           echo '<h1>frontend de prueba</h1>' > ../frontend/dist/index.html
           docker compose --profile https up -d --wait --wait-timeout 120
-          curl --fail --silent --show-error --insecure https://localhost/api/salud
+          # Caddy tarda un momento en crear su certificado local: se reintenta unos segundos.
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 2 --retry-all-errors https://localhost/api/salud
           curl --fail --silent --show-error --insecure https://localhost/ | grep -q "frontend de prueba"
           curl --fail --silent --show-error --insecure https://localhost/arboles/IE001-0001 | grep -q "frontend de prueba"
       - name: Registros de los contenedores
