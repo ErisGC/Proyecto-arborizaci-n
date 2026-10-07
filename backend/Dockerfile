@@ -13,6 +13,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY app ./app
+COPY seeds ./seeds
 
 # Se ejecuta con un usuario sin privilegios. /datos/fotos es donde se monta el volumen de fotografías.
 RUN useradd --create-home --uid 1000 arbol \

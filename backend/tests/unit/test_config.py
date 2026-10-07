@@ -80,3 +80,4 @@ def test_la_plantilla_no_trae_secretos():
     plantilla = _variables_de_la_plantilla()
     assert plantilla["POSTGRES_PASSWORD"] == ""
     assert plantilla["JWT_SECRET"] == ""
+    assert plantilla["ADMIN_PASSWORD"] == ""

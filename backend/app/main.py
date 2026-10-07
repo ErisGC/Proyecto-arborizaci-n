@@ -11,8 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.core.config import Settings, get_settings
-from app.core.database import crear_engine, crear_sesiones
-from app.presentation.api.routes import salud
+from app.core.database import Base, crear_engine, crear_sesiones
+from app.infrastructure.database import models  # noqa: F401  (registra las tablas)
+from app.infrastructure.storage.fotos import AlmacenFotos
+from app.presentation.api.routes import arboles, auth, catalogos, salud, usuarios
+from app.presentation.middleware.errores import registrar_manejadores
+from seeds.catalogos import cargar_catalogos
+from seeds.usuarios import crear_admin_inicial
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -22,15 +27,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         settings.storage_path.mkdir(parents=True, exist_ok=True)
+        app.state.almacen = AlmacenFotos(settings.storage_path)
         engine = crear_engine(settings.url_base_datos)
         app.state.engine = engine
         app.state.sesiones = crear_sesiones(engine)
+        # Mientras no haya migraciones con Alembic, las tablas que falten se crean al arrancar.
+        Base.metadata.create_all(engine)
+        with app.state.sesiones() as db:
+            cargar_catalogos(db)
+            contrasena = settings.admin_password.get_secret_value() if settings.admin_password else None
+            crear_admin_inicial(db, settings.admin_email, contrasena)
         yield
         engine.dispose()
 
     app = FastAPI(
         title="Inventario Arbóreo Escolar - API",
-        version="0.1.0",
+        version="0.2.0",
         docs_url=f"{prefijo}/docs",
         redoc_url=f"{prefijo}/redoc",
         openapi_url=f"{prefijo}/openapi.json",
@@ -47,8 +59,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    registrar_manejadores(app)
 
-    app.include_router(salud.router, prefix=prefijo)
+    for modulo in (salud, auth, usuarios, catalogos, arboles):
+        app.include_router(modulo.router, prefix=prefijo)
 
     @app.get("/", include_in_schema=False)
     def raiz():

@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.database import crear_engine
 from app.main import create_app
 
 
@@ -10,9 +11,10 @@ def test_salud_con_base_de_datos(cliente):
     assert r.json()["entorno"] == "pruebas"
 
 
-def test_salud_sin_base_de_datos(ajustes, tmp_path):
-    ajustes.database_url = f"sqlite:///{(tmp_path / 'no-existe' / 'x.db').as_posix()}"
-    with TestClient(create_app(ajustes)) as c:
+def test_salud_cuando_la_base_se_cae_despues_de_arrancar(ajustes, tmp_path):
+    app = create_app(ajustes)
+    with TestClient(app) as c:
+        app.state.engine = crear_engine(f"sqlite:///{(tmp_path / 'no-existe' / 'x.db').as_posix()}")
         r = c.get("/api/salud")
     assert r.status_code == 503
     assert r.json()["base_de_datos"] == "sin conexión"

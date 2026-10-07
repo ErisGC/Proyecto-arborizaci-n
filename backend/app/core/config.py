@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 480
     cors_origins: str = "http://localhost:5173"
 
+    # Primer administrador: se crea al arrancar si la base no tiene usuarios.
+    admin_email: str | None = None
+    admin_password: SecretStr | None = None
+
     # Fotografías
     storage_path: Path = Path("data/fotos")
 
